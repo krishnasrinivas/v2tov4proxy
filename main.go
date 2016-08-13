@@ -4,75 +4,63 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/krishnasrinivas/v2tov4proxy/auth"
 	"github.com/vulcand/oxy/forward"
 )
 
-func (a v2auth) verifyAuth(r *http.Request) bool {
-	expectedAuth := signV2(*r, a.accessKey, a.secretKey)
+type proxy struct {
+	scheme  string
+	host    string
+	ingress auth.Signer
+	egress  auth.Signer
+	h       http.Handler
+}
+
+func (p proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	encodedResource := r.URL.RawPath
+	encodedQuery := r.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.Split(r.URL.Path, "?")
+		if len(splits) > 0 {
+			encodedResource = splits[0]
+		}
+	}
+
+	expectedAuth := p.ingress.Sign(r.Method, encodedResource, encodedQuery, r.Header)
 	gotAuth := r.Header.Get("Authorization")
 	fmt.Println("got", gotAuth, "expected", expectedAuth)
-	// return true
-	return gotAuth == expectedAuth
-}
 
-// To forward the request to the address specified with -f
-type v2auth struct {
-	scheme    string
-	host      string
-	accessKey string
-	secretKey string
-	h         http.Handler
-}
-
-func (a v2auth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// fmt.Println(r.URL.Path, r.URL.Query())
-	// fmt.Println(r.URL.RawPath, r.URL.RawQuery)
-	if !a.verifyAuth(r) {
+	if gotAuth != expectedAuth {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	r.Header.Del("Authorization")
-	// Initial time.
-	t := time.Now().UTC()
 
-	// Set x-amz-date.
-	r.Header.Set("X-Amz-Date", t.Format(iso8601DateFormat))
+	r.Header.Del("Authorization")
+
+	dateStr := r.Header.Get("X-Amz-Date")
+	if dateStr == "" {
+		dateStr = time.Now().UTC().Format(auth.DateFormat)
+		r.Header.Set("X-Amz-Date", dateStr)
+	}
+
 	r.Header.Del("Date")
 	r.Header.Del("Connection")
 
+	r.Header.Set("Host", r.Host)
 	r.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
-	r.URL.Host = r.Host
-	r.Header.Set("Authorization", signV4(*r, a.accessKey, a.secretKey, "us-east-1"))
+	r.Header.Set("Authorization", p.egress.Sign(r.Method, encodedResource, strings.Replace(encodedQuery, "/", "%2F", -1), r.Header))
 
-	r.URL.Scheme = a.scheme
-	r.URL.Host = a.host
-	// body := r.Body
-	// r.Body = struct {
-	// 	io.Reader
-	// 	io.Closer
-	// }{
-	// 	io.TeeReader(body, os.Stdout),
-	// 	closer(func() error {
-	// 		return body.Close()
-	// 	}),
-	// }
-	a.h.ServeHTTP(w, r)
+	r.URL.Scheme = p.scheme
+	r.URL.Host = p.host
+	p.h.ServeHTTP(w, r)
 }
 
-// To typecast a func to io.Closer
-type closer func() error
+type norewrite struct{}
 
-func (c closer) Close() error {
-	return c()
-}
-
-type rewrite struct{}
-
-func (r rewrite) Rewrite(req *http.Request) {
-
-}
+func (r norewrite) Rewrite(req *http.Request) {}
 
 func main() {
 	listenAddr := flag.String("l", ":8000", "listen address")
@@ -87,10 +75,16 @@ func main() {
 		fmt.Println("access/secret key should be specified")
 		return
 	}
-	fwd, _ := forward.New(forward.PassHostHeader(true), forward.Rewriter(rewrite{}))
+	fwd, _ := forward.New(forward.PassHostHeader(true), forward.Rewriter(norewrite{}))
 	server := &http.Server{
-		Addr:    *listenAddr,
-		Handler: v2auth{"http", *fwdAddr, *accessKey, *secretKey, fwd},
+		Addr: *listenAddr,
+		Handler: proxy{
+			"http",
+			*fwdAddr,
+			auth.CredentialsV2{*accessKey, *secretKey, "us-east-1"},
+			auth.CredentialsV4{*accessKey, *secretKey, "us-east-1"},
+			fwd,
+		},
 	}
 
 	if *cert != "" && *key != "" {
