@@ -40,11 +40,7 @@ func (p proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.Header.Del("Authorization")
 
-	dateStr := r.Header.Get("X-Amz-Date")
-	if dateStr == "" {
-		dateStr = time.Now().UTC().Format(auth.DateFormat)
-		r.Header.Set("X-Amz-Date", dateStr)
-	}
+	r.Header.Set("X-Amz-Date", time.Now().UTC().Format(auth.DateFormat))
 
 	r.Header.Del("Date")
 	r.Header.Del("Connection")
