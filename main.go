@@ -40,18 +40,32 @@ func (p proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.Header.Del("Authorization")
 
-	r.Header.Set("X-Amz-Date", time.Now().UTC().Format(auth.DateFormat))
+	dateStr := time.Now().UTC().Format(auth.DateFormat)
+	r.Header.Set("X-Amz-Date", dateStr)
 
 	r.Header.Del("Date")
 	r.Header.Del("Connection")
 
 	r.Header.Set("Host", r.Host)
 	r.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
+
+	encodedResource = canonicalEncoding(encodedResource)
+	encodedQuery = canonicalEncoding(encodedQuery)
+	r.URL.RawPath = encodedResource
+	r.URL.RawQuery = encodedQuery
+	r.URL.Path = canonicalEncoding(r.URL.Path)
 	r.Header.Set("Authorization", p.egress.Sign(r.Method, encodedResource, strings.Replace(encodedQuery, "/", "%2F", -1), r.Header))
 
 	r.URL.Scheme = p.scheme
 	r.URL.Host = p.host
 	p.h.ServeHTTP(w, r)
+}
+
+func canonicalEncoding(str string) string {
+	str = strings.Replace(str, "%2D", "-", -1)
+	str = strings.Replace(str, "%5F", "_", -1)
+	str = strings.Replace(str, "%7E", "~", -1)
+	return str
 }
 
 type norewrite struct{}
