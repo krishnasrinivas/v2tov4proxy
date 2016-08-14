@@ -82,7 +82,7 @@ func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 		index := strings.Index(query, "=")
 		if index != -1 {
 			key = query[:index]
-			val = query[index:]
+			val = query[index+1:]
 		}
 		keyval[key] = val
 	}
