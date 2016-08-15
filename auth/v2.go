@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+// Sign-V2 calculation rule is give here:
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
+
+// Whitelist resource list that will be used in query string for signature-V2 calculation.
 var resourceList = []string{
 	"acl",
 	"lifecycle",
@@ -28,12 +32,14 @@ var resourceList = []string{
 	"website",
 }
 
+// CredentialsV2 - for signature-V2 calculation
 type CredentialsV2 struct {
 	AccessKey string
 	SecretKey string
 	Region    string
 }
 
+// Sign - return the Authorization header value.
 func (c CredentialsV2) Sign(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	canonicalHeaaders := canonicalizedAmzHeadersV2(headers)
 	if len(canonicalHeaaders) > 0 {
@@ -47,13 +53,14 @@ func (c CredentialsV2) Sign(method string, encodedResource string, encodedQuery 
 		headers.Get("Date"),
 		canonicalHeaaders,
 	}, "\n") + canonicalizedResourceV2(encodedResource, encodedQuery)
-	fmt.Println(stringToSign)
+
 	hm := hmac.New(sha1.New, []byte(c.SecretKey))
 	hm.Write([]byte(stringToSign))
 	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
-	return fmt.Sprintf("%s %s:%s", signV2Algorithm, c.AccessKey, signature)
+	return fmt.Sprintf("%s %s:%s", SignV2Algorithm, c.AccessKey, signature)
 }
 
+// Return canonical headers.
 func canonicalizedAmzHeadersV2(headers http.Header) string {
 	var keys []string
 	keyval := make(map[string]string)
@@ -73,6 +80,7 @@ func canonicalizedAmzHeadersV2(headers http.Header) string {
 	return strings.Join(canonicalHeaders, "\n")
 }
 
+// Return canonical resource string.
 func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 	queries := strings.Split(encodedQuery, "&")
 	keyval := make(map[string]string)

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"net/textproto"
 	"sort"
@@ -10,6 +9,10 @@ import (
 	"time"
 )
 
+// Sign-V4 calculation rule for single chunk is given here:
+// http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+
+// These headers are ignored for signature calculation.
 var ignoredHeaders = map[string]bool{
 	"authorization":  true,
 	"content-type":   true,
@@ -17,24 +20,26 @@ var ignoredHeaders = map[string]bool{
 	"user-agent":     true,
 }
 
+// CredentialsV4 - S3 creds for Sign-V4.
 type CredentialsV4 struct {
 	AccessKey string
 	SecretKey string
 	Region    string
 }
 
+// Sign - Signa and return Authorization header value.
 func (c CredentialsV4) Sign(method string, encodedResource string, encodedQuery string, headers http.Header) (authHeader string) {
 	dateStr := headers.Get("X-Amz-Date")
 	date, _ := time.Parse(DateFormat, dateStr)
 	canonicalReq := getCanonicalRequest(method, encodedResource, encodedQuery, headers)
-	fmt.Println(canonicalReq)
+
 	stringToSign := strings.Join([]string{
-		signV4Algorithm,
+		SignV4Algorithm,
 		date.Format(DateFormat),
 		getScope(c.Region, date),
 		hex.EncodeToString(sum256([]byte(canonicalReq))),
 	}, "\n")
-	fmt.Println(stringToSign)
+
 	signingKey := getSigningKey(c.SecretKey, c.Region, date)
 
 	credential := getCredential(c.AccessKey, c.Region, date)
@@ -44,7 +49,7 @@ func (c CredentialsV4) Sign(method string, encodedResource string, encodedQuery 
 	signature := getSignature(signingKey, stringToSign)
 
 	authHeader = strings.Join([]string{
-		signV4Algorithm + " Credential=" + credential,
+		SignV4Algorithm + " Credential=" + credential,
 		" SignedHeaders=" + signedHeaders,
 		" Signature=" + signature,
 	}, ",")
@@ -52,6 +57,13 @@ func (c CredentialsV4) Sign(method string, encodedResource string, encodedQuery 
 	return authHeader
 }
 
+// Canonical request is constructed as:
+// <HTTPMethod>\n
+// <CanonicalURI>\n
+// <CanonicalQueryString>\n
+// <CanonicalHeaders>\n
+// <SignedHeaders>\n
+// <HashedPayload>
 func getCanonicalRequest(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	return strings.Join([]string{
 		method,
@@ -63,6 +75,11 @@ func getCanonicalRequest(method string, encodedResource string, encodedQuery str
 	}, "\n")
 }
 
+// Canonical headers is constructed as:
+// Lowercase(<HeaderName1>)+":"+Trim(<value>)+"\n"
+// Lowercase(<HeaderName2>)+":"+Trim(<value>)+"\n"
+// ...
+// Lowercase(<HeaderNameN>)+":"+Trim(<value>)+"\n"
 func getCanonicalHeaders(headers http.Header) string {
 	keys := signedHeaders(headers)
 	var canonicalHeaders []string
@@ -87,10 +104,13 @@ func signedHeaders(headers http.Header) []string {
 	return keys
 }
 
+// SignedHeaders is an alphabetically sorted, semicolon-separated list of lowercase request header names.
+// The request headers in the list are the same headers that you included in the CanonicalHeaders string.
 func getSignedHeaders(headers http.Header) string {
 	return strings.Join(signedHeaders(headers), ";")
 }
 
+// Sha256 sum of the payload.
 func getHashedPayload(headers http.Header) string {
 	hashedPayload := headers.Get("X-Amz-Content-Sha256")
 	if hashedPayload == "" {
