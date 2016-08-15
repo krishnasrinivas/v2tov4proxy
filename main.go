@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/krishnasrinivas/v2tov4proxy/auth"
 	"github.com/vulcand/oxy/forward"
+	"github.com/vulcand/oxy/utils"
 )
 
 // Proxy from a V2 ingress to V4 egress.
@@ -115,7 +117,7 @@ func main() {
 	}
 
 	// Forwarding http.Handler
-	fwd, _ := forward.New(forward.PassHostHeader(true), forward.Rewriter(norewrite{}))
+	fwd, _ := forward.New(forward.PassHostHeader(true), forward.Rewriter(norewrite{}), forward.Logger(utils.NewFileLogger(os.Stdout, utils.INFO)))
 
 	// HTTP server.
 	server := &http.Server{
