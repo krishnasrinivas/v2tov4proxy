@@ -34,14 +34,4 @@ func sumHMAC(key []byte, data []byte) []byte {
 func sortQuery(encodedQuery string) string {
 	m, _ := url.ParseQuery(encodedQuery)
 	return strings.Replace(m.Encode(), "+", "%20", -1)
-	// queries := strings.Split(encodedQuery, "&")
-	// var newQueries []string
-	// for _, query := range queries {
-	// 	if query != "" && !strings.Contains(query, "=") {
-	// 		query = query + "="
-	// 	}
-	// 	newQueries = append(newQueries, query)
-	// }
-	// sort.Sort(ByQueryKey(newQueries))
-	// return strings.Join(newQueries, "&")
 }
