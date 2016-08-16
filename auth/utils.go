@@ -3,7 +3,7 @@ package auth
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"sort"
+	"net/url"
 	"strings"
 )
 
@@ -32,14 +32,16 @@ func sumHMAC(key []byte, data []byte) []byte {
 }
 
 func sortQuery(encodedQuery string) string {
-	queries := strings.Split(encodedQuery, "&")
-	var newQueries []string
-	for _, query := range queries {
-		if query != "" && !strings.Contains(query, "=") {
-			query = query + "="
-		}
-		newQueries = append(newQueries, query)
-	}
-	sort.Sort(ByQueryKey(newQueries))
-	return strings.Join(newQueries, "&")
+	m, _ := url.ParseQuery(encodedQuery)
+	return m.Encode()
+	// queries := strings.Split(encodedQuery, "&")
+	// var newQueries []string
+	// for _, query := range queries {
+	// 	if query != "" && !strings.Contains(query, "=") {
+	// 		query = query + "="
+	// 	}
+	// 	newQueries = append(newQueries, query)
+	// }
+	// sort.Sort(ByQueryKey(newQueries))
+	// return strings.Join(newQueries, "&")
 }

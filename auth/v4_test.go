@@ -26,7 +26,7 @@ func getHeader(entries []keyval) http.Header {
 }
 
 func TestSignv4(t *testing.T) {
-	c := Credentials{"AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", "us-east-1"}
+	c := CredentialsV4{"AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", "us-east-1"}
 
 	testCases := []struct {
 		arg   argument
@@ -87,7 +87,7 @@ func TestSignv4(t *testing.T) {
 	}
 	for _, test := range testCases {
 		expected := test.authz
-		got := c.SignV4(test.arg.method, test.arg.resource, test.arg.query, test.arg.headers)
+		got := c.Sign(test.arg.method, test.arg.resource, test.arg.query, test.arg.headers)
 		if expected == got {
 			continue
 		}
