@@ -117,7 +117,12 @@ func main() {
 	}
 
 	// Forwarding http.Handler
-	fwd, _ := forward.New(forward.PassHostHeader(true), forward.Rewriter(norewrite{}), forward.Logger(utils.NewFileLogger(os.Stdout, utils.INFO)))
+	fwd, _ := forward.New(
+		forward.PassHostHeader(true),
+		forward.Rewriter(norewrite{}),
+		forward.RoundTripper(&http.Transport{DisableCompression: true}),
+		forward.Logger(utils.NewFileLogger(os.Stdout, utils.ERROR)),
+	)
 
 	// HTTP server.
 	server := &http.Server{
